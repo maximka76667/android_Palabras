@@ -1,7 +1,5 @@
 package com.example.adivina_palabra;
 
-import androidx.appcompat.app.AppCompatActivity;
-
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -9,17 +7,18 @@ import android.widget.TableLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AppCompatActivity;
+
 public class MainActivity extends AppCompatActivity {
-    public static final int NUM_PALABRAS= 6;
-    public static final int NUM_LETRAS_EN_PALABRA=5;
-    private TextView palabras[][] = new TextView[NUM_PALABRAS][NUM_LETRAS_EN_PALABRA];
-
-    String palabraAAdivinar="";
-    int intento;
+    public static final int NUM_PALABRAS = 6;
+    public static final int NUM_LETRAS_EN_PALABRA = 5;
+    private final TextView[][] palabras = new TextView[NUM_PALABRAS][NUM_LETRAS_EN_PALABRA];
+    String palabraAAdivinar = "";
+    int numIntentoActual;
     int indiceletraActual;
-
     TableLayout tableLayout_teclado;
     TextView tv_resultado;
+    BDpalabras bd;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -28,12 +27,13 @@ public class MainActivity extends AppCompatActivity {
         tableLayout_teclado = findViewById(R.id.tableLayout_teclado);
         tv_resultado = findViewById(R.id.tv_resultado);
         inicializaArrayPalabras();
-        
-		// Completar. Aquí debemos obtener y asignar a palabraAAdivinar una palabra aleatoria de la base de datos
-		
-		intento = 0;
+
+        bd = new BDpalabras(MainActivity.this);
+        palabraAAdivinar = bd.obtenPalabraAleatoria();
+
+        numIntentoActual = 0;
         indiceletraActual = 0;
-        Toast.makeText(getApplicationContext(),palabraAAdivinar,Toast.LENGTH_SHORT).show();
+        Toast.makeText(getApplicationContext(), palabraAAdivinar, Toast.LENGTH_SHORT).show();
     }
 
 
@@ -73,94 +73,116 @@ public class MainActivity extends AppCompatActivity {
         palabras[5][2] = findViewById(R.id.textView_5_2);
         palabras[5][3] = findViewById(R.id.textView_5_3);
         palabras[5][4] = findViewById(R.id.textView_5_4);
-        
+
     }
 
 
-    public void click_letra(View view) {
+    public void onPrintLetter(View view) {
 
-        if (indiceletraActual<=NUM_LETRAS_EN_PALABRA-1 && palabras[intento][indiceletraActual].getText().length()==0 ) {
+        if (indiceletraActual <= NUM_LETRAS_EN_PALABRA - 1 && palabras[numIntentoActual][indiceletraActual].getText().length() == 0) {
             Button b = (Button) view;
             char letra = b.getText().charAt(0);
-            palabras[intento][indiceletraActual].setText(letra+"");
-            palabras[intento][indiceletraActual].setBackgroundResource(R.drawable.cuadrado_resaltado);
-            if (indiceletraActual < NUM_LETRAS_EN_PALABRA-1) indiceletraActual++;
+            palabras[numIntentoActual][indiceletraActual].setText(letra + "");
+            palabras[numIntentoActual][indiceletraActual].setBackgroundResource(R.drawable.cuadrado_resaltado);
+            if (indiceletraActual < NUM_LETRAS_EN_PALABRA - 1) indiceletraActual++;
         }
 
     }
 
-    public void click_enviar(View view) {
-        if (indiceletraActual == NUM_LETRAS_EN_PALABRA-1 && palabras[intento][indiceletraActual].getText().length()>0) {
-            String palabraUsuario = "";
-            for (int i = 0; i < NUM_LETRAS_EN_PALABRA; i++) {
-                palabraUsuario = palabraUsuario + palabras[intento][i].getText();
-            }
-
-            if (palabraUsuario.equals(palabraAAdivinar)) {
-                colorearPalabraIntento(palabraUsuario);
-                Toast.makeText(getApplicationContext(),"HAS GANADO!!!!", Toast.LENGTH_SHORT).show();
-                tableLayout_teclado.setVisibility(View.GONE);
-            }
-            else {
-				boolean existeEnDiccionario=false;
-				// Completar
-                if (!existeEnDiccionario) {
-                    Toast.makeText(getApplicationContext(),"La palabra no está en el diccionario", Toast.LENGTH_SHORT).show();
-                } else {
-                    Toast.makeText(getApplicationContext(), "Ha fallado la palabra", Toast.LENGTH_SHORT).show();
-                    colorearPalabraIntento(palabraUsuario);
-                    if (intento<NUM_PALABRAS-1) {
-                        intento++;
-                        indiceletraActual = 0;
-                    }
-                    else {
-                        Toast.makeText(getApplicationContext(), "Ha perdido la partida", Toast.LENGTH_SHORT).show();
-                        tableLayout_teclado.setVisibility(View.GONE);
-                        tv_resultado.setText("PALABRA: " + palabraAAdivinar);
-                    }
-                }
-            }
-        }
-        else {
-            Toast.makeText(getApplicationContext(),"Debe introducir todas las letras",Toast.LENGTH_SHORT).show();
+    public void onSubmit(View view) {
+        if (indiceletraActual != NUM_LETRAS_EN_PALABRA - 1 || palabras[numIntentoActual][indiceletraActual].getText().length() <= 0) {
+            showShortToastMessage("Debe introducir todas las letras");
+            return;
         }
 
+        String palabraUsuario = obtenerPalabraUsuario();
+
+        // Si la palabra no está en el diccionario
+        if (!bd.palabraEnDiccionario(palabraUsuario)) {
+            showShortToastMessage("La palabra no está en el diccionario");
+            return;
+        }
+
+        colorearPalabraIntento(palabraUsuario);
+
+        // Victoria
+        if (palabraUsuario.equals(palabraAAdivinar)) {
+            showShortToastMessage("HAS GANADO!!!!");
+            tableLayout_teclado.setVisibility(View.GONE);
+            return;
+        }
+
+        // Si no ha ganado
+        showShortToastMessage("Ha fallado la palabra " + palabraUsuario + "," + palabraAAdivinar);
+
+        // Pérdida - si es preúltimo intento y todavía no ha ganado
+        if (numIntentoActual >= NUM_PALABRAS - 1) {
+            showShortToastMessage("Ha perdido la partida");
+            tableLayout_teclado.setVisibility(View.GONE);
+            tv_resultado.setText("PALABRA: " + palabraAAdivinar);
+            return;
+        }
+
+        // Nuevo intento
+        numIntentoActual++;
+        indiceletraActual = 0;
     }
 
-    public void click_borrar(View view) {
-        if (palabras[intento][indiceletraActual].getText().length()==0) {
-            if (indiceletraActual>0) indiceletraActual--;
+    public String obtenerPalabraUsuario() {
+        String palabraUsuario = "";
+        for (int i = 0; i < NUM_LETRAS_EN_PALABRA; i++) {
+            palabraUsuario = palabraUsuario + palabras[numIntentoActual][i].getText();
         }
-        palabras[intento][indiceletraActual].setText("");
-        palabras[intento][indiceletraActual].setBackgroundResource(R.drawable.cuadrado);
+        return palabraUsuario;
+    }
+
+    public void showShortToastMessage(String message) {
+        Toast.makeText(getApplicationContext(), message, Toast.LENGTH_SHORT).show();
+    }
+
+    public void onRemoveLetter(View view) {
+        if (palabras[numIntentoActual][indiceletraActual].getText().length() == 0) {
+            if (indiceletraActual > 0) indiceletraActual--;
+        }
+        palabras[numIntentoActual][indiceletraActual].setText("");
+        palabras[numIntentoActual][indiceletraActual].setBackgroundResource(R.drawable.cuadrado);
 
     }
 
     void colorearPalabraIntento(String palabraUsuario) {
-        for(int i=0; i<palabraAAdivinar.length(); i++ ) {
+        // Pasamos todas las letras de la palabra de usuario y establecemos un color
+        for (int i = 0; i < palabraAAdivinar.length(); i++) {
+            // Gris - caso por defecto
+            int drawable = R.drawable.cuadrado_gris;
+
+            // Verde - si letra coincide en la misma posición
             if (palabraAAdivinar.charAt(i) == palabraUsuario.charAt(i)) {
-                palabras[intento][i].setBackgroundResource(R.drawable.cuadrado_verde);
+                drawable = R.drawable.cuadrado_verde;
             }
-            else if (palabraAAdivinar.contains(palabraUsuario.charAt(i)+"")){
-                palabras[intento][i].setBackgroundResource(R.drawable.cuadrado_amarillo);
+            // Amarillo - si letra existe pero en otra posición
+            else if (palabraAAdivinar.contains(palabraUsuario.charAt(i) + "")) {
+                drawable = R.drawable.cuadrado_amarillo;
             }
-            else {
-                palabras[intento][i].setBackgroundResource(R.drawable.cuadrado_gris);
-            }
+
+            // Establecer color a letra
+            palabras[numIntentoActual][i].setBackgroundResource(drawable);
         }
+
     }
 
 
     @Override
     protected void onStop() {
         super.onStop();
-        // Completar
+
+        bd.cierraBD();
     }
 
 
     @Override
     protected void onRestart() {
         super.onRestart();
-        // Completar
+
+        bd.cierraBD();
     }
 }
